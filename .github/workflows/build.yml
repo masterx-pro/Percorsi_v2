@@ -8,10 +8,17 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
+    timeout-minutes: 90
     
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -22,62 +29,47 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          python3-pip \
           build-essential \
           git \
           zip \
           unzip \
-          openjdk-17-jdk \
           autoconf \
           libtool \
           pkg-config \
           zlib1g-dev \
           libncurses5-dev \
           libncursesw5-dev \
-          libtinfo5 \
           cmake \
           libffi-dev \
           libssl-dev \
-          automake
+          automake \
+          gettext
 
-    - name: Install Python dependencies
+    - name: Install buildozer
       run: |
-        pip install --upgrade pip
+        pip install --upgrade pip wheel setuptools
         pip install buildozer==1.5.0 cython==0.29.36
 
-    - name: Build APK with Buildozer
+    - name: Build APK
       run: |
-        yes | buildozer android debug
-      env:
-        ANDROID_SDK_ROOT: ${{ github.workspace }}/.buildozer/android/platform/android-sdk
+        export JAVA_HOME=$JAVA_HOME_17_X64
+        buildozer android debug 2>&1 | tee build.log
+        echo "=== Checking for APK ==="
+        find . -name "*.apk" -type f
+        ls -la bin/ || echo "bin/ not found"
 
-    - name: Upload APK artifact
+    - name: Upload APK
       uses: actions/upload-artifact@v4
       with:
-        name: percorsi-android-apk
+        name: percorsi-pro-apk
         path: bin/*.apk
+        if-no-files-found: warn
         retention-days: 30
-```
-
-### Step 3: Salva il file
-1. Scorri in basso
-2. Clicca **"Commit changes..."**
-3. Clicca **"Commit changes"** nel popup
-
-### Step 4: Avvia la Build
-1. Vai su **Actions** (tab in alto)
-2. Ora vedrai **"Build Android APK"** a sinistra
-3. Cliccaci sopra
-4. Clicca **"Run workflow"** → **"Run workflow"**
-
----
-
-## ✅ Verifica che hai questi file nel repository:
-```
-percorsi-android/
-├── .github/
-│   └── workflows/
-│       └── build.yml    ← QUESTO DEVE ESISTERE
-├── main.py
-├── buildozer.spec
-└── README.md
+    
+    - name: Upload build log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-log
+        path: build.log
+        retention-days: 7
